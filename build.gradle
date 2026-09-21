@@ -1,0 +1,56 @@
+plugins {
+    id 'application'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+application {
+    mainClass = 'ctstation.Main'
+}
+
+// The project intentionally has zero external dependencies so it builds
+// offline. A small custom JUnit-free test runner is used instead of
+// TestNG/JUnit: src/test/java contains main-style test classes and the
+// task below compiles them together with the main classes.
+sourceSets {
+    test {
+        java {
+            srcDirs = ['src/test/java']
+        }
+        resources {
+            srcDirs = ['src/test/resources']
+        }
+    }
+}
+
+def testRun = tasks.register('testRun', JavaExec) {
+    group = 'verification'
+    description = 'Runs the built-in test suite (zero-dependency test runner).'
+    dependsOn 'testClasses'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'ctstation.AllTests'
+    workingDir = layout.projectDirectory.asFile
+}
+
+// The project ships its own JUnit-free runner; run it in a plain JVM
+// process (works fully offline with zero external dependencies).
+tasks.named('test') {
+    dependsOn 'testClasses'
+    actions = []
+    doLast {
+        def cp = sourceSets.test.runtimeClasspath.files
+                .collect { it.absolutePath }.join(File.pathSeparator)
+        def javaExe = System.getProperty('java.home') + '/bin/java'
+        def proc = new ProcessBuilder(javaExe, '-cp', cp, 'ctstation.AllTests')
+                .directory(layout.projectDirectory.asFile)
+                .redirectErrorStream(true).start()
+        proc.inputStream.transferTo(System.out)
+        if (proc.waitFor() != 0) {
+            throw new GradleException('built-in test suite failed')
+        }
+    }
+}

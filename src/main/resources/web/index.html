@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>坐标变换注册站</title>
+<style>
+  :root {
+    --bg:#0f1420; --panel:#171e2e; --panel2:#1e2740; --ink:#e7ecf5;
+    --muted:#93a0b8; --line:#2b3650; --accent:#5aa9ff; --good:#3ecf8e;
+    --bad:#ff6b6b; --warn:#ffb454; --pending:#c792ea;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+         background:var(--bg); color:var(--ink); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line);
+           display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  header .ver { color:var(--muted); font-size:12px; }
+  main { display:grid; grid-template-columns: 440px 1fr; gap:14px; padding:14px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+          padding:14px; margin-bottom:14px; }
+  .card h2 { margin:0 0 10px; font-size:14px; color:var(--accent); }
+  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 3px; }
+  input,textarea,select,button {
+    font:inherit; background:var(--panel2); color:var(--ink);
+    border:1px solid var(--line); border-radius:6px; padding:6px 8px; width:100%; }
+  textarea { min-height:120px; font-family:ui-monospace,Menlo,monospace; font-size:12px; }
+  button { width:auto; cursor:pointer; margin:6px 6px 0 0; padding:6px 12px; }
+  button.primary { background:var(--accent); color:#08111f; border-color:var(--accent); font-weight:600; }
+  button.ghost { background:transparent; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:120px; }
+  canvas { background:#0b101b; border:1px solid var(--line); border-radius:8px; display:block; width:100%; }
+  #graphCanvas { height:360px; }
+  #overCanvas { height:300px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th,td { text-align:left; padding:5px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .tag { display:inline-block; padding:0 6px; border-radius:10px; font-size:11px; }
+  .tag.active { background:rgba(62,207,142,.18); color:var(--good); }
+  .tag.pending { background:rgba(199,146,234,.18); color:var(--pending); }
+  .tag.disabled { background:rgba(255,107,107,.15); color:var(--bad); }
+  .ok { color:var(--good); } .fail { color:var(--bad); } .warn { color:var(--warn); }
+  .muted { color:var(--muted); }
+  pre { background:#0b101b; border:1px solid var(--line); border-radius:8px;
+        padding:10px; overflow:auto; font-size:11.5px; max-height:260px; }
+  .cand-ok { border-left:3px solid var(--good); }
+  .cand-no { border-left:3px solid var(--bad); opacity:.85; }
+  .cand-best { outline:1px solid var(--accent); }
+  .cand { padding:6px 8px; margin:5px 0; background:var(--panel2); border-radius:6px; cursor:pointer; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .legend span { margin-right:10px; font-size:12px; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; }
+  .pill { font-size:11px; color:var(--muted); }
+  a { color:var(--accent); }
+  .toast { position:fixed; right:16px; bottom:16px; background:var(--panel2);
+           border:1px solid var(--line); padding:10px 14px; border-radius:8px; display:none; }
+  .err-box { background:rgba(255,107,107,.1); border:1px solid var(--bad);
+             border-radius:6px; padding:8px; margin:6px 0; font-size:12px; color:#ffb3b3; }
+</style>
+</head>
+<body>
+<header>
+  <h1>坐标变换注册站</h1>
+  <span class="ver">Coordinate Transform Registry · 离线 · 无远程服务</span>
+  <span class="ver" id="regVersion"></span>
+  <span style="flex:1"></span>
+  <button class="ghost" onclick="refresh()">刷新状态</button>
+  <button class="ghost" onclick="doExport()">导出 JSON</button>
+  <button class="ghost" onclick="doImport()">导入 JSON</button>
+  <button class="ghost" onclick="reseed()">重置为演示数据</button>
+</header>
+
+<main>
+  <div>
+    <div class="card">
+      <h2>① 登记坐标参考系</h2>
+      <div class="row">
+        <div><label>ID</label><input id="crsId" placeholder="EPSG:32654"></div>
+        <div><label>类型</label><select id="crsKind">
+          <option value="projected">projected (投影/米)</option>
+          <option value="geographic">geographic (经纬度)</option>
+        </select></div>
+      </div>
+      <div class="row">
+        <div><label>名称</label><input id="crsName" placeholder="可选"></div>
+        <div><label>单位</label><input id="crsUnits" placeholder="metres / degrees"></div>
+      </div>
+      <button class="primary" onclick="addCrs()">登记 CRS</button>
+    </div>
+
+    <div class="card">
+      <h2>② 登记变换边</h2>
+      <div class="row">
+        <div><label>边 ID</label><input id="edgeId" placeholder="E_LOCAL_GRID"></div>
+        <div><label>回路不一致容差</label><input id="edgeTol" value="0.001"></div>
+      </div>
+      <div class="row">
+        <div><label>源 CRS</label><select id="edgeFrom"></select></div>
+        <div><label>目标 CRS</label><select id="edgeTo"></select></div>
+      </div>
+      <label>仿射矩阵 [a,b,c,d,e,f]，(x',y') = (a x + b y + e, c x + d y + f)</label>
+      <input id="edgeMatrix" value="1,0,0,1,0,0">
+      <div class="row">
+        <div><label>精度上界 x（目标 CRS 单位）</label><input id="edgeAx" value="0.1"></div>
+        <div><label>精度上界 y</label><input id="edgeAy" value="0.1"></div>
+      </div>
+      <div class="row">
+        <div><label>可安全求逆</label>
+          <select id="edgeInv"><option value="">由矩阵判定</option>
+          <option value="true">true</option><option value="false">false（禁止求逆）</option></select></div>
+        <div><label>有效范围（留空=全域；bbox 支持反经线 minLon&gt;maxLon）</label>
+          <input id="edgeCoverage" placeholder='{"type":"bbox","bbox":[170,40,-160,65]}'></div>
+      </div>
+      <button class="primary" onclick="addEdge()">登记边（回路不一致将自动待确认）</button>
+    </div>
+
+    <div class="card">
+      <h2>③ 待确认边</h2>
+      <div id="pendingList" class="muted">加载中…</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>参考系与变换图（实线=正向可用；虚线=仅逆向；紫=待确认）</h2>
+      <canvas id="graphCanvas" width="900" height="360"></canvas>
+      <div class="legend" style="margin-top:6px">
+        <span><i class="dot" style="background:var(--good)"></i>active</span>
+        <span><i class="dot" style="background:var(--pending)"></i>pending</span>
+        <span><i class="dot" style="background:var(--accent)"></i>CRS 节点</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>④ 批量变换作业</h2>
+      <div class="row">
+        <div><label>源 CRS</label><select id="jobFrom"></select></div>
+        <div><label>目标 CRS</label><select id="jobTo"></select></div>
+        <div style="flex:0 0 auto"><label>&nbsp;</label>
+          <button class="primary" onclick="runJob()">运行作业</button></div>
+      </div>
+      <label>粘贴 GeoJSON（Feature 会自动展开几何；支持 Point/MultiPoint/LineString/Polygon/Multi*）</label>
+      <textarea id="geoInput">{
+  "type": "FeatureCollection",
+  "features": [
+    { "type":"Feature", "properties":{"id":"tokyo"},
+      "geometry":{"type":"Point","coordinates":[139.7671,35.6812]} },
+    { "type":"Feature", "geometry":{"type":"LineString",
+      "coordinates":[[139.7,35.65],[139.75,35.7],[139.8,35.68]]} }
+  ]
+}</textarea>
+      <div id="jobSummary" class="muted" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h2>⑤ 输入（蓝）/输出（橙）叠加画布</h2>
+      <canvas id="overCanvas" width="900" height="300"></canvas>
+      <div class="legend" style="margin-top:6px">
+        <span><i class="dot" style="background:#5aa9ff"></i>输入</span>
+        <span><i class="dot" style="background:#ffb454"></i>输出</span>
+        <span class="pill" id="overInfo"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>⑥ 候选路径：接受 / 排除原因（点击高亮画布路径节点）</h2>
+      <div id="candidateInfo" class="muted">运行作业后显示每个对象的候选链评估。</div>
+    </div>
+
+    <div class="card">
+      <h2>历史作业（结果绑定当时注册表版本，永不回改）</h2>
+      <div id="jobHistory" class="muted">加载中…</div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>
