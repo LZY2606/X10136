@@ -1,0 +1,32 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+application {
+    mainClass = 'station.Main'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// 测试以自研运行器执行（无外部依赖），挂到标准 test 任务上
+tasks.named('test') {
+    enabled = false
+    dependsOn 'stationTest'
+}
+
+tasks.register('stationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs the station test suite'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'station.test.TestSuite'
+}
