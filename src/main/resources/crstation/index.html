@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>坐标变换注册站</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #18202f; --panel2: #1f2a3d; --line: #2c3a52;
+    --text: #e6edf7; --muted: #93a3bb; --accent: #5db0ff; --ok: #4cd07d;
+    --warn: #ffb84d; --bad: #ff6b6b; --pending: #c792ea;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+         background:var(--bg); color:var(--text); }
+  header { padding:14px 22px; border-bottom:1px solid var(--line);
+           display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:19px; margin:0; }
+  header .ver { color:var(--muted); font-size:12px; }
+  main { display:grid; grid-template-columns: 380px 1fr 1fr; gap:14px; padding:14px 22px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+           padding:14px; }
+  .panel h2 { font-size:14px; margin:0 0 10px; color:var(--accent); }
+  textarea, select, input { width:100%; background:var(--panel2); color:var(--text);
+           border:1px solid var(--line); border-radius:6px; padding:7px 9px; font:inherit; }
+  textarea { resize:vertical; }
+  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 3px; }
+  button { background:var(--accent); color:#08131f; border:0; border-radius:6px;
+           padding:7px 14px; font-weight:600; cursor:pointer; margin-top:10px; }
+  button.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--line); }
+  button.danger { background:#3a2330; color:var(--bad); border:1px solid #5a3340; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .row > * { flex:1; }
+  canvas { background:#0b101a; border:1px solid var(--line); border-radius:8px;
+           width:100%; display:block; }
+  .small { font-size:12px; color:var(--muted); }
+  .tag { display:inline-block; padding:1px 8px; border-radius:99px; font-size:11px;
+         border:1px solid var(--line); margin-left:6px; }
+  .tag.active { color:var(--ok); border-color:#2c6a45; }
+  .tag.pending { color:var(--pending); border-color:#5e3f78; }
+  .item { border:1px solid var(--line); border-radius:8px; padding:9px 11px;
+          margin-bottom:8px; background:var(--panel2); }
+  .item.ok { border-left:3px solid var(--ok); }
+  .item.fail { border-left:3px solid var(--bad); }
+  .path-step { font-family:ui-monospace,Menlo,monospace; font-size:12px;
+               background:#101826; border:1px solid var(--line); border-radius:5px;
+               padding:2px 6px; margin:2px 3px 2px 0; display:inline-block; }
+  .rej { color:var(--bad); font-size:12px; margin:3px 0; }
+  .acc { color:var(--ok); font-size:12px; margin:3px 0; }
+  .err { color:var(--bad); font-size:12px; }
+  .muted { color:var(--muted); }
+  details { margin-top:6px; }
+  summary { cursor:pointer; color:var(--muted); font-size:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; font-size:11px;
+        background:#0b101a; border:1px solid var(--line); border-radius:6px;
+        padding:8px; max-height:260px; overflow:auto; }
+  .edgeLine { font-size:12px; padding:4px 0; border-bottom:1px dashed var(--line); }
+  #edges { max-height:240px; overflow:auto; }
+  .legend { font-size:11px; color:var(--muted); margin-top:6px; }
+  .legend i { display:inline-block; width:10px; height:3px; margin:0 4px 0 10px; }
+  .banner { font-size:12px; padding:6px 10px; border-radius:6px; margin-bottom:8px; display:none; }
+  .banner.show { display:block; }
+  .banner.err { background:#2f1620; color:#ffb3b3; border:1px solid #5a2738; }
+</style>
+</head>
+<body>
+<header>
+  <h1>坐标变换注册站</h1>
+  <span class="ver" id="ver"></span>
+  <span style="flex:1"></span>
+  <button class="secondary" id="btnExport" type="button">导出 JSON</button>
+  <button class="secondary" id="btnImport" type="button">导入 JSON</button>
+</header>
+<main>
+  <!-- LEFT: registry + input -->
+  <section class="panel">
+    <h2>变换图</h2>
+    <canvas id="graph" width="340" height="300"></canvas>
+    <div class="legend">
+      <i style="background:#5db0ff"></i>确认边
+      <i style="background:#c792ea"></i>待确认边
+      <i style="background:#4cd07d"></i>所选链
+    </div>
+    <details><summary>注册新参考系</summary>
+      <label>代码 *</label><input id="crsCode" placeholder="EPSG:4326">
+      <label>名称</label><input id="crsName" placeholder="WGS 84">
+      <label><input type="checkbox" id="crsGeo" style="width:auto"> 地理坐标（经纬度）</label>
+      <button id="btnAddCrs" type="button">登记参考系</button>
+    </details>
+    <details><summary>登记新变换边</summary>
+      <label>边 ID *</label><input id="edgeId" placeholder="my-edge-1">
+      <div class="row"><div><label>起点 CRS *</label><select id="edgeFrom"></select></div>
+      <div><label>终点 CRS *</label><select id="edgeTo"></select></div></div>
+      <label>变换定义（JSON）</label>
+      <textarea id="edgeTransform" rows="3">{"type":"affine","a":1,"b":0,"c":0,"d":0,"e":1,"f":0}</textarea>
+      <label>有效范围 domain（bbox 数组或 GeoJSON Polygon）</label>
+      <textarea id="edgeDomain" rows="2">[-180,-85,180,85]</textarea>
+      <div class="row"><div><label>误差上界（米当量）</label><input id="edgeAcc" value="1"></div>
+      <div><label><input type="checkbox" id="edgeInv" style="width:auto" checked> 可安全求逆</label></div></div>
+      <button id="btnAddEdge" type="button">登记边</button>
+    </details>
+    <div class="banner err" id="regBanner"></div>
+    <h2 style="margin-top:14px">注册表</h2>
+    <div id="edges"></div>
+  </section>
+
+  <!-- MIDDLE: input + run -->
+  <section class="panel">
+    <h2>批量作业</h2>
+    <div class="row">
+      <div><label>源 CRS</label><select id="fromCrs"></select></div>
+      <div><label>目标 CRS</label><select id="toCrs"></select></div>
+    </div>
+    <label>粘贴 GeoJSON（Point / LineString / Polygon / Feature / FeatureCollection）</label>
+    <textarea id="geojson" rows="14">{
+  "type": "FeatureCollection",
+  "features": [
+    { "type":"Feature", "properties":{"name":"东京塔"},
+      "geometry":{"type":"Point","coordinates":[139.7454,35.6586]} },
+    { "type":"Feature", "properties":{"name":"海湾线"},
+      "geometry":{"type":"LineString","coordinates":[[139.7,35.6],[139.8,35.65],[139.85,35.55]]} },
+    { "type":"Feature", "properties":{"name":"越界点(应失败)"},
+      "geometry":{"type":"Point","coordinates":[139.7,95.0]} }
+  ]
+}</textarea>
+    <button id="btnRun" type="button">选择链路并变换</button>
+    <button class="secondary" id="btnSample" type="button">填入反经线示例</button>
+    <div class="banner err" id="runBanner"></div>
+    <h2 style="margin-top:14px">输入 / 输出叠加</h2>
+    <canvas id="overlay" width="520" height="320"></canvas>
+    <div class="legend">
+      <i style="background:#93a3bb"></i>输入
+      <i style="background:#4cd07d"></i>输出
+      <span class="small">（源与目标量纲不同时分左右视口）</span>
+    </div>
+  </section>
+
+  <!-- RIGHT: results -->
+  <section class="panel">
+    <h2>作业结果与路径解释</h2>
+    <div id="results" class="muted">尚未执行作业。</div>
+    <details><summary>历史作业</summary><div id="history"></div></details>
+    <details><summary>原始 JSON 结果</summary><pre id="raw"></pre></details>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
