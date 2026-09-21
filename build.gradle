@@ -1,0 +1,37 @@
+plugins {
+    id 'application'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+application {
+    mainClass = 'ctr.Main'
+}
+
+tasks.register('runUnitTests', JavaExec) {
+    dependsOn(tasks.named('classes'))
+    dependsOn(tasks.named('compileCustomTests'))
+    group = 'verification'
+    description = 'Runs the repository-built zero-dependency unit tests.'
+    classpath = sourceSets.main.runtimeClasspath + files('build/classes/custom-test')
+    mainClass = 'ctr.tests.AllTests'
+}
+
+tasks.register('compileCustomTests', JavaCompile) {
+    group = 'verification'
+    description = 'Compiles the repository-built zero-dependency unit tests.'
+    source = fileTree('src/test/java') {
+        include '**/*.java'
+    }
+    classpath = sourceSets.main.runtimeClasspath
+    destinationDirectory = layout.buildDirectory.dir('classes/custom-test')
+}
+
+tasks.named('test') {
+    dependsOn(tasks.named('compileCustomTests'))
+    dependsOn(tasks.named('runUnitTests'))
+}

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>坐标变换注册站</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header>
+  <div>
+    <h1>坐标变换注册站</h1>
+    <p>登记坐标参考系与带范围、精度说明的变换边；检查有效链路、累计误差上界和历史绑定。</p>
+  </div>
+  <div class="status" id="status">正在连接服务……</div>
+</header>
+
+<main>
+  <section class="card wide">
+    <h2>参考系与变换图</h2>
+    <div class="toolbar">
+      <span>版本 <b id="registryVersion">-</b></span>
+      <span class="mono" id="registryFingerprint"></span>
+      <button id="refreshBtn">刷新</button>
+      <button id="exportBtn">导出 JSON</button>
+      <label class="file">导入<input id="importFile" type="file" accept="application/json,.json"></label>
+    </div>
+    <svg id="graph" viewBox="0 0 920 390" role="img" aria-label="CRS 与变换图"></svg>
+    <p class="hint">实线：默认可用边；虚线：待确认；红色反向标签：逆变换未开放。</p>
+  </section>
+
+  <section class="card">
+    <h2>粘贴 GeoJSON 并选择链路</h2>
+    <div class="grid2">
+      <label>源 CRS<select id="sourceCrs"></select></label>
+      <label>目标 CRS<select id="targetCrs"></select></label>
+    </div>
+    <textarea id="geoInput" spellcheck="false"></textarea>
+    <div class="toolbar wrap">
+      <button id="sampleBtn">填充东京示例</button>
+      <button id="datelineBtn">填充反经线示例</button>
+      <button id="planBtn">仅查看候选路径</button>
+      <button id="submitBtn" class="primary">提交批量作业</button>
+    </div>
+    <div id="message" class="message"></div>
+  </section>
+
+  <section class="card">
+    <h2>输入 / 输出叠加画布</h2>
+    <canvas id="canvas" width="520" height="410"></canvas>
+    <div class="legend">
+      <span><i class="input"></i>输入</span>
+      <span><i class="output"></i>输出</span>
+      <span><i class="bad"></i>失败位置</span>
+    </div>
+    <p class="mono small" id="canvasInfo">尚无作业结果</p>
+  </section>
+
+  <section class="card wide">
+    <h2>候选路径接受 / 排除解释</h2>
+    <div id="candidates"></div>
+  </section>
+
+  <section class="card">
+    <h2>登记参考系</h2>
+    <input id="newCrsId" placeholder="ID，如 CITY_LOCAL">
+    <input id="newCrsName" placeholder="名称">
+    <select id="newCrsAxes"><option value="geographic">geographic</option><option value="projected">projected</option></select>
+    <input id="newCrsUnit" placeholder="unit，如 degree / metre">
+    <input id="newCrsDescription" placeholder="说明">
+    <button id="createCrsBtn">登记 CRS</button>
+  </section>
+
+  <section class="card">
+    <h2>登记变换边</h2>
+    <p class="hint">矩阵：x'=a·x+b·y+c，y'=d·x+e·y+f。反经线范围使用 minX ≥ maxX 并勾选 crossesAntimeridian。</p>
+    <div class="grid3">
+      <input id="edgeId" placeholder="edge id">
+      <select id="edgeFrom"></select>
+      <select id="edgeTo"></select>
+      <input id="edgeA" type="number" step="any" value="1"><input id="edgeB" type="number" step="any" value="0"><input id="edgeC" type="number" step="any" value="0">
+      <input id="edgeD" type="number" step="any" value="0"><input id="edgeE" type="number" step="any" value="1"><input id="edgeF" type="number" step="any" value="0">
+      <input id="edgeAcc" type="number" step="any" value="0.5">
+      <label class="check"><input id="edgeInverseSafe" type="checkbox"> inverseSafe</label>
+      <input id="edgeInvAcc" type="number" step="any" value="0.5">
+      <div class="grid4">
+        <input id="boxMinX" type="number" step="any" value="139.2">
+        <input id="boxMinY" type="number" step="any" value="35">
+        <input id="boxMaxX" type="number" step="any" value="140.3">
+        <input id="boxMaxY" type="number" step="any" value="36">
+      </div>
+      <label class="check"><input id="boxCrosses" type="number" style="display:none"><input id="boxCross" type="checkbox"> crossesAntimeridian</label>
+    </div>
+    <button id="createEdgeBtn">登记边（自动抽样回路检查）</button>
+  </section>
+
+  <section class="card wide">
+    <h2>待确认边</h2>
+    <div id="pending"></div>
+    <div class="inline">
+      <input id="confirmId" placeholder="待确认 edge id">
+      <input id="confirmReason" placeholder="确认理由（必填）">
+      <button id="confirmBtn">确认并生成新版本</button>
+    </div>
+  </section>
+
+  <section class="card wide">
+    <h2>历史作业</h2>
+    <div id="jobs"></div>
+  </section>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>
